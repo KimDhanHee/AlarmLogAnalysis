@@ -104,7 +104,7 @@ def get_alarmy_log_df():
 
 
 def get_alarm_scheduled_logs(log_df):
-    return alarmy_log_df[log_df['event name'] == ALARM_SCHEDULE_EVENT]
+    return log_df[log_df['event name'] == ALARM_SCHEDULE_EVENT]
 
 
 if __name__ == "__main__":
@@ -115,7 +115,7 @@ if __name__ == "__main__":
 
     alarmy_log_df = get_alarmy_log_df()
     # 알람 예약 이벤트만 별도 추출
-    alarm_scheduled_logs = get_alarm_scheduled_logs()
+    alarm_scheduled_logs = get_alarm_scheduled_logs(alarmy_log_df)
 
     start_event_idxes = list(alarmy_log_df[alarmy_log_df['event name'] == START_EVENT].index)
     end_event_idxes = list(alarmy_log_df[alarmy_log_df['event name'] == END_EVENT].index)
