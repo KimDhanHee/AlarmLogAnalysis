@@ -53,39 +53,69 @@ def is_abnormal(log_df, properties):
     return False
 
 
-if __name__ == "__main__":
-    raw_path = sys.argv[1]
-    # 기기 고유 식별값
-    raw_name = raw_path.split('/')[-1].split('.')[0]
-    alarm_log_path = f"./alarm_logs/{raw_name}"
-    normal_alarm_log_path = f"{alarm_log_path}/normal"
-    abnormal_alarm_log_path = f"{alarm_log_path}/abnormal"
+def get_device_id():
+    return sys.argv[1].split('/')[-1].split('.')[0]
 
-    if not os.path.exists(alarm_log_path):
-        os.mkdir(alarm_log_path)
 
-    if not os.path.exists(normal_alarm_log_path):
-        os.mkdir(normal_alarm_log_path)
+def get_alarm_log_path():
+    log_path = f"./alarm_logs/{get_device_id()}"
 
-    if not os.path.exists(abnormal_alarm_log_path):
-        os.mkdir(abnormal_alarm_log_path)
+    if not os.path.exists(log_path):
+        os.mkdir(log_path)
 
-    for file_name in os.listdir(normal_alarm_log_path):
-        os.remove(f"{normal_alarm_log_path}/{file_name}")
+    return log_path
 
-    for file_name in os.listdir(abnormal_alarm_log_path):
-        os.remove(f"{abnormal_alarm_log_path}/{file_name}")
 
-    alarmy_log_df = pd.read_csv(raw_path, header=None, delimiter='\t')
-    alarmy_log_df.columns = ['timestamps', 'event name', 'event property']
+def get_alarm_normal_log_path():
+    log_path = f"{get_alarm_log_path()}/normal"
+
+    if not os.path.exists(log_path):
+        os.mkdir(log_path)
+
+    for file in os.listdir(log_path):
+        os.remove(f"{log_path}/{file}")
+
+    return log_path
+
+
+def get_alarm_abnormal_log_path():
+    log_path = f"{get_alarm_log_path()}/abnormal"
+
+    if not os.path.exists(log_path):
+        os.mkdir(log_path)
+
+    for file in os.listdir(log_path):
+        os.remove(f"{log_path}/{file}")
+
+    return log_path
+
+
+def get_alarmy_log_df():
+    log_df = pd.read_csv(sys.argv[1], header=None, delimiter='\t')
+    log_df.columns = ['timestamps', 'event name', 'event property']
     # 필터링 할 (관심 대상 X) 이벤트 필터링
-    alarmy_log_df = alarmy_log_df[~alarmy_log_df['event name'].isin(FILTERED_EVENTS)]
+    log_df = log_df[~log_df['event name'].isin(FILTERED_EVENTS)]
     # Alarm ID 추출
-    alarmy_log_df['alarm id'] = alarmy_log_df['event property'].apply(get_alarm_id)
+    log_df['alarm id'] = log_df['event property'].apply(get_alarm_id)
     # Column 순서 재정의
-    alarmy_log_df = alarmy_log_df[['timestamps', 'alarm id', 'event name', 'event property']]
+    log_df = log_df[['timestamps', 'alarm id', 'event name', 'event property']]
+
+    return log_df
+
+
+def get_alarm_scheduled_logs(log_df):
+    return alarmy_log_df[log_df['event name'] == ALARM_SCHEDULE_EVENT]
+
+
+if __name__ == "__main__":
+    # 기기 고유 식별값
+    raw_name = get_device_id()
+    normal_alarm_log_path = get_alarm_normal_log_path()
+    abnormal_alarm_log_path = get_alarm_abnormal_log_path()
+
+    alarmy_log_df = get_alarmy_log_df()
     # 알람 예약 이벤트만 별도 추출
-    alarm_scheduled_logs = alarmy_log_df[alarmy_log_df['event name'] == ALARM_SCHEDULE_EVENT]
+    alarm_scheduled_logs = get_alarm_scheduled_logs()
 
     start_event_idxes = list(alarmy_log_df[alarmy_log_df['event name'] == START_EVENT].index)
     end_event_idxes = list(alarmy_log_df[alarmy_log_df['event name'] == END_EVENT].index)
