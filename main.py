@@ -39,18 +39,18 @@ def merge_alarm_properties(df):
     return props
 
 
-def is_abnormal(log_df, properties):
+def get_abnormal_case(log_df, properties):
     # 마지막 이벤트가 설정에서 명시한 마지막 이벤트가 아닌 경우
     if log_df.iloc[-1]['event name'] != END_EVENT:
-        return True
+        return 'case_1'
 
     # 스누즈가 아닌데 첫 alarm id 와 마지막 alarm id 가 다른 경우
     if 'snoozed_count' in properties and \
             properties['snoozed_count'] == 0 and \
             log_df.iloc[0]['alarm id'] != log_df.iloc[-1]['alarm id']:
-        return True
+        return 'case_2'
 
-    return False
+    return None
 
 
 def get_device_id():
@@ -162,8 +162,11 @@ if __name__ == "__main__":
         alarm_time = alarm_log_df.iloc[1]['timestamps']
 
         # visualize alarm logs
-        y = alarm_log_df['event name'].unique()
-        x = alarm_log_df['event name'].value_counts()[y]
+        alarm_log_df['event name (alarm id)'] = list(
+            map(lambda e: f'{e[0]} ({e[1]})',
+                zip(alarm_log_df['event name'], alarm_log_df['alarm id'])))
+        y = alarm_log_df['event name (alarm id)'].unique()
+        x = alarm_log_df['event name (alarm id)'].value_counts()[y]
 
         figure, ax = plt.subplots(figsize=(20, len(alarm_properties) / 2 + len(alarm_log_df) / 3))
         # 알람 속성 알파벳 순 정렬
@@ -183,9 +186,10 @@ if __name__ == "__main__":
 
         # logging alarm logs
         file_name = f'{alarm_time}_alarm_{end_alarm_id}'
-        if is_abnormal(alarm_log_df, alarm_properties):
-            alarm_log_df.to_csv(f'{abnormal_alarm_log_path}/{file_name}.csv')
-            plt.savefig(f'{abnormal_alarm_log_path}/{file_name}.png', dpi=150)
+        abnormal_case = get_abnormal_case(alarm_log_df, alarm_properties)
+        if abnormal_case is not None:
+            alarm_log_df.to_csv(f'{abnormal_alarm_log_path}/{abnormal_case}_{file_name}.csv')
+            plt.savefig(f'{abnormal_alarm_log_path}/{abnormal_case}_{file_name}.png', dpi=150)
         else:
             alarm_log_df.to_csv(f'{normal_alarm_log_path}/{file_name}.csv')
             plt.savefig(f'{normal_alarm_log_path}/{file_name}.png', dpi=150)
