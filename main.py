@@ -13,6 +13,8 @@ import matplotlib.pyplot as plt
 
 import seaborn as sns
 
+from datetime import datetime
+
 import json
 
 import sys
@@ -37,20 +39,6 @@ def merge_alarm_properties(df):
         props.update(alarm_properties)
 
     return props
-
-
-def get_abnormal_case(log_df, properties):
-    # 마지막 이벤트가 설정에서 명시한 마지막 이벤트가 아닌 경우
-    if log_df.iloc[-1]['event name'] != END_EVENT:
-        return 'case_1'
-
-    # 스누즈가 아닌데 첫 alarm id 와 마지막 alarm id 가 다른 경우
-    if 'snoozed_count' in properties and \
-            properties['snoozed_count'] == 0 and \
-            log_df.iloc[0]['alarm id'] != log_df.iloc[-1]['alarm id']:
-        return 'case_2'
-
-    return None
 
 
 def get_device_id():
@@ -107,9 +95,59 @@ def get_alarm_scheduled_logs(log_df):
     return log_df[log_df['event name'] == ALARM_SCHEDULE_EVENT]
 
 
+def get_abnormal_case(log_df, properties):
+    # Case1. 마지막 이벤트가 설정에서 명시한 마지막 이벤트가 아닌 경우
+    if log_df.iloc[-1]['event name'] != END_EVENT:
+        return 'case_1'
+
+    # Case2. 스누즈가 아닌고 후속 알람이 없는데 첫 alarm id 와 마지막 alarm id 가 다른 경우
+    if 'snoozed_count' in properties and \
+            properties['snoozed_count'] == 0 and \
+            log_df.iloc[0]['alarm id'] != log_df.iloc[-1]['alarm id'] and \
+            len(log_df[log_df['event name'] == START_EVENT]) != len(log_df[log_df['event name'] == END_EVENT]):
+        return 'case_2'
+
+    # Case3. START_EVENT 와 END_EVENT 사이에 의도하지 EVENT 가 발생한 경우
+    if log_df['event name'].isin(UNINTENTIONAL_EVENTS).sum() > 0:
+        return 'case_3'
+
+    # Case4. "alarm_receiver_to_service" 이벤트와 "start_foreground_in_alarm_notify" 이벤트 사이에 5초 이상의 시간이 걸릴 경우
+    if 'start_foreground_in_alarm_notify' in log_df['event name']:
+        preceding_events = log_df[log_df['event name'] == 'alarm_receiver_to_service']
+        trailing_events = log_df[log_df['event name'] == 'start_foreground_in_alarm_notify']
+
+        idx = 0
+        trail = trailing_events.iloc[idx]
+
+        for _, pre in preceding_events.iterrows():
+            pre_time = pre['timestamps']
+            trail_time = trail['timestamps']
+
+            if (datetime.strptime(trail_time, '%Y-%m-%d %H:%M:%S') - datetime.strptime(pre_time, '%Y-%m-%d %H:%M:%S')) \
+                    .seconds >= 5:
+                return 'case_4'
+
+            try:
+                idx += 1
+                if trailing_events.iloc[idx] is not None:
+                    trail = trailing_events.iloc[idx]
+            except:
+                break
+
+    # Case5. START_EVENT 에서 END_EVENT 까지 임계치 이상의 시간이 소요될 경우
+    if START_EVENT in log_df['event name'] and END_EVENT in log_df['event name']:
+        start_time = log_df[log_df['event name'] == START_EVENT].iloc[0]
+        end_time = log_df[log_df['event name'] == END_EVENT].iloc[0]
+        start_time = datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S')
+        end_time = datetime.strptime(end_time, '%Y-%m-%d %H:%M:%S')
+
+        if (end_time - start_time).seconds >= START_END_THRESHOLD:
+            return 'case_5'
+
+    return None
+
+
 if __name__ == "__main__":
-    # 기기 고유 식별값
-    raw_name = get_device_id()
     normal_alarm_log_path = get_alarm_normal_log_path()
     abnormal_alarm_log_path = get_alarm_abnormal_log_path()
 
@@ -187,6 +225,7 @@ if __name__ == "__main__":
         # logging alarm logs
         file_name = f'{alarm_time}_alarm_{end_alarm_id}'
         abnormal_case = get_abnormal_case(alarm_log_df, alarm_properties)
+
         if abnormal_case is not None:
             alarm_log_df.to_csv(f'{abnormal_alarm_log_path}/{abnormal_case}_{file_name}.csv')
             plt.savefig(f'{abnormal_alarm_log_path}/{abnormal_case}_{file_name}.png', dpi=150)

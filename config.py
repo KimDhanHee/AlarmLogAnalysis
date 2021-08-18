@@ -9,3 +9,5 @@ FILTERED_EVENTS = [
     'format',
     'xday_noti_canceled'
 ]
+UNINTENTIONAL_EVENTS = ["kill_process_invoked", "kill_process_executed"]
+START_END_THRESHOLD = 6 * 60 * 60
